@@ -1,0 +1,63 @@
+package com.example.gpssender;
+
+import android.Manifest; import android.content.pm.PackageManager; import android.location.Location; import android.location.LocationListener; import android.location.LocationManager; import android.os.Bundle; import android.util.Log;
+
+import androidx.annotation.NonNull; import androidx.appcompat.app.AppCompatActivity; import androidx.core.app.ActivityCompat;
+
+import java.io.OutputStream; import java.net.InetSocketAddress; import java.net.ServerSocket; import java.net.Socket;
+
+public class MainActivity extends AppCompatActivity { private static final int LOCATION_PERMISSION_REQUEST = 1; private static final int PORT = 5050; private LocationManager locationManager; private ServerSocket serverSocket;
+
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
+
+    locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+    requestLocationUpdates();
+    startServer();
+}
+
+private void requestLocationUpdates() {
+    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST);
+        return;
+    }
+    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 5, new LocationListener() {
+        @Override
+        public void onLocationChanged(@NonNull Location location) {
+            sendLocation(location);
+        }
+    });
+}
+
+private void sendLocation(Location location) {
+    new Thread(() -> {
+        try {
+            if (serverSocket != null) {
+                Socket socket = serverSocket.accept();
+                OutputStream outputStream = socket.getOutputStream();
+                String locationData = location.getLatitude() + "," + location.getLongitude();
+                outputStream.write(locationData.getBytes());
+                outputStream.close();
+                socket.close();
+            }
+        } catch (Exception e) {
+            Log.e("GPS Sender", "Error sending location", e);
+        }
+    }).start();
+}
+
+private void startServer() {
+    new Thread(() -> {
+        try {
+            serverSocket = new ServerSocket();
+            serverSocket.bind(new InetSocketAddress(PORT));
+            Log.i("GPS Sender", "Server started on port " + PORT);
+        } catch (Exception e) {
+            Log.e("GPS Sender", "Error starting server", e);
+        }
+    }).start();
+}
+
+}
